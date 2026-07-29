@@ -56,12 +56,13 @@ install_packages() {
         nixpkgs#nmap \
         nixpkgs#amass \
         nixpkgs#go \
-        nixpkgs#python3 \
-        nixpkgs#python3Packages.pip \
-        nixpkgs#git \
+        nixpkgs#gcc \
         nixpkgs#toilet \
         nixpkgs#whois \
-        nixpkgs#bind
+        nixpkgs#bind \
+        nixpkgs#python3Packages.pip \
+        nixpkgs#python3 \
+        nixpkgs#git 
     AMASS_VIA_GO=0
     ;;
     apt)
@@ -121,7 +122,10 @@ TARGET_HOME=$(eval echo "~$TARGET_USER")
 
 for rcfile in "$TARGET_HOME/.bashrc" "$TARGET_HOME/.zshrc"; do
     if [[ -f "$rcfile" ]] && ! grep -q "$GOPATH_BIN" "$rcfile"; then
-        echo "export PATH=\$PATH:$GOPATH_BIN" >> "$rcfile"
+        if ! echo "export PATH=\$PATH:$GOPATH_BIN" >> "$rcfile" 2>/dev/null; then
+            echo -e "${yellow}Could not write to $rcfile (read-only — likely managed by home-manager/Nix).${reset}"
+            echo -e "${yellow}Add this to your home-manager config instead: programs.bash.sessionVariables.PATH or home.sessionPath = [ \"$GOPATH_BIN\" ];${reset}"
+        fi
     fi
 done
 
@@ -141,12 +145,17 @@ if [[ "$AMASS_VIA_GO" == "1" ]]; then
     go install -v github.com/owasp-amass/amass/v4/...@master
 fi
 
-for bin in subfinder httprobe assetfinder amass; do
-    if [[ -f "$GOPATH_BIN/$bin" ]]; then
-        cp -f "$GOPATH_BIN/$bin" /usr/local/bin/
-    fi
-done
-
+if [[ "$PKG_MANAGER" == "nix" ]]; then
+    echo -e "${yellow}Skipping binary copy step on NixOS — Nix profile directories are read-only.${reset}"
+    echo -e "${yellow}Binaries remain available via \$GOPATH_BIN ($GOPATH_BIN), which is already on PATH for this session.${reset}"
+else
+    mkdir -p /usr/local/bin
+    for bin in subfinder httprobe assetfinder amass; do
+        if [[ -f "$GOPATH_BIN/$bin" ]]; then
+            cp -f "$GOPATH_BIN/$bin" /usr/local/bin/
+        fi
+    done
+fi
 # paramspider installation
 
 echo -e "${green}Installing paramspider.....${reset}"
